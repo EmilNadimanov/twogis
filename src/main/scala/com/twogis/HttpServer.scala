@@ -14,6 +14,7 @@ import java.util.concurrent.Executors
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import HttpCrawlerUtils.{buildCrawlStream, toUrl}
+import akka.http.scaladsl.server.Route
 import com.twogis.CrawlerActor
 
 
@@ -37,19 +38,20 @@ object HttpServer extends DefaultJsonProtocol with SprayJsonSupport  {
    * - array[string] | titles of the webpages that were passed. Order is retained. <br/>
    * Absence of a title on a page results in an empty string at the corresponding position in this array. Non-valid, non-reachable urls will will yield the same result.
    */
-  val api = path("crawl") {
+  val api: Route = path("crawl" ) {
+    parameter("verbose".optional) { verbose =>
     (post & requestEntityPresent) {
       entity(as[List[String]]) { urls =>
-        onComplete{ buildCrawlStream(urls, router).run() } {
+        onComplete {
+          val v: Boolean = verbose.isDefined
+          buildCrawlStream(urls, router, v).run()
+        } {
           case Success(v) => complete(v.toJson)
           case Failure(e) => complete(List.empty[String].toJson)
         }
       }
-    } ~
-    get {
-      complete(List("foo").toJson)
     }
-  }
+  }}
 
   def run(address: String, port: Int): Future[Http.ServerBinding] = {
     Http().newServerAt(address, port).bind(api)

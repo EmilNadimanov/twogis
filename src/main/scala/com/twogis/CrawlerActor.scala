@@ -8,10 +8,11 @@ import akka.http.scaladsl.model.StatusCodes.*
 import akka.http.scaladsl.unmarshalling.Unmarshal
 
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.{ExecutionContext, Future}
-import java.net.URL
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
+import java.net.{MalformedURLException, URL}
 import com.twogis.HttpCrawlerUtils.toUrl
 import org.jsoup.Jsoup
+import org.jsoup.parser.ParseError
 
 import java.util.concurrent.Executors
 
@@ -41,7 +42,7 @@ case class CrawlerActor(http: HttpExt)(sendRequest: HttpRequest => Future[HttpRe
 
 
   override def receive: Receive = {
-    case CrawlTask(link) =>
+    case CrawlTask(link, verbose) =>
       val title = Try {
         val request = HttpRequest(uri = link.toUrl.toString)
         followRedirect(request)
@@ -49,7 +50,13 @@ case class CrawlerActor(http: HttpExt)(sendRequest: HttpRequest => Future[HttpRe
           .map(htmlDoc => Jsoup.parse(htmlDoc).title())
       } match {
         case Success(title) => title
-        case Failure(e) => Future(s"")
+        case Failure(e) => e match {
+          case _ if !verbose => Future("")
+          case e: MalformedURLException => Future(s"ERROR: Malformed url. Make sure the protocol is included in the url")
+          case e: TimeoutException => Future(s"ERROR: Timeout exception while connecting to the specified address")
+          case e: RuntimeException => Future(s"ERROR: Runtime error")
+          case e: Throwable => Future(s"ERROR: Some other kind of error: ${e.getMessage}")
+        }
       }
       title pipeTo sender
     case other => log.error(s"Bad message: $other")
@@ -57,7 +64,7 @@ case class CrawlerActor(http: HttpExt)(sendRequest: HttpRequest => Future[HttpRe
 }
 
 object CrawlerActor {
-  case class CrawlTask(link: String)
+  case class CrawlTask(link: String, verbose: Boolean = false)
 
   def props(http: HttpExt)(using sendRequest: HttpRequest => Future[HttpResponse] = http.singleRequest(_)): Props =
     Props(CrawlerActor(http)(sendRequest))
