@@ -42,7 +42,6 @@ case class CrawlerActor(http: HttpExt)(sendRequest: HttpRequest => Future[HttpRe
 
   override def receive: Receive = {
     case CrawlTask(link) =>
-      log.info(s"Got task: $link")
       val title = Try {
         val request = HttpRequest(uri = link.toUrl.toString)
         followRedirect(request)
