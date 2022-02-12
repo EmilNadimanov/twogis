@@ -50,10 +50,7 @@ case class CrawlerActor(http: HttpExt)(sendRequest: HttpRequest => Future[HttpRe
           .map(htmlDoc => Jsoup.parse(htmlDoc).title())
       } match {
         case Success(title) => title
-        case Failure(e) => Future(s"ERROR: ${e}")
-      }
-      title.onComplete{ x =>
-        log.info(s"All good! Piping ${x}")
+        case Failure(e) => Future(s"")
       }
       title pipeTo sender
     case other => log.error(s"Bad message: $other")
